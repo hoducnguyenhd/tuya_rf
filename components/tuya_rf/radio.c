@@ -84,7 +84,7 @@ int StartRx() {
 
 	CMT2300A_EnableFifoMerge(true);
 
-	CMT2300A_WriteReg(CMT2300A_CUS_PKT29, 0x20); 
+	CMT2300A_WriteReg(CMT2300A_CUS_PKT29, 0x00); 
 
 	CMT2300A_GoSleep();
 	CMT2300A_GoStby();
