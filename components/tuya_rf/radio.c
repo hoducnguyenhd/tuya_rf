@@ -1,6 +1,7 @@
 #include "radio.h"
 #include "cmt2300a.h"
 
+
 void Radio_Init(void)
 {
     CMT2300A_Init();
@@ -19,7 +20,11 @@ void Radio_Init(void)
 }
 
 
-void Radio_StartRx(void)
+/* =========================
+   REQUIRED BY tuya_rf_libretiny.cpp
+   ========================= */
+
+void StartRx(void)
 {
     CMT2300A_GoStby();
 
@@ -37,7 +42,25 @@ void Radio_StartRx(void)
 }
 
 
-void Radio_RestartRx(void)
+void StartTx(void)
+{
+    CMT2300A_GoStby();
+
+    delay(5);
+
+    CMT2300A_ClearInterruptFlags();
+
+    delay(5);
+
+    CMT2300A_GoTx();
+
+    delay(10);
+}
+
+
+/* Optional nhưng tốt cho stability */
+
+void RestartRx(void)
 {
     CMT2300A_GoSleep();
 
