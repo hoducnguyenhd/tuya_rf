@@ -1,6 +1,5 @@
 #include "tuya_rf.h"
 #include "radio.h"
-
 #include "esphome/core/log.h"
 
 namespace esphome {
@@ -9,76 +8,70 @@ namespace tuya_rf {
 static const char *TAG = "tuya_rf";
 
 
-void TuyaRfComponent::setup()
-{
-  Radio_Init();
+void TuyaRfComponent::setup() {
+
+  radio_init();
 
   if (!this->receiver_disabled_)
     StartRx();
+
 }
 
 
 
-void TuyaRfComponent::loop()
-{
+void TuyaRfComponent::loop() {
 
   if (this->receiver_disabled_)
     return;
 
 
-  uint16_t pulses[512];
+  uint16_t raw[512];
 
-  int len = radio_receive(pulses, 512);
+  int len = GetRfRawData(raw);
 
 
-  //
-  // Không đủ dữ liệu thì bỏ
-  //
+  if(len < 50)
+      return;
 
-  if (len < 60)
-    return;
 
 
   //
-  // tìm sync gap (~10ms)
+  // tìm sync ~10ms
   //
 
   int start = -1;
 
-  for (int i = 0; i < len; i++)
+  for(int i=0;i<len;i++)
   {
-    if (pulses[i] > 9000)
-    {
-      start = i;
-      break;
-    }
+      if(raw[i] > 9000)
+      {
+          start = i;
+          break;
+      }
   }
 
 
-  if (start < 0)
-    return;
-
-
-  //
-  // frame RF chuẩn
-  //
-
-  int frame_len = 140;
-
-  if (start + frame_len > len)
-      frame_len = len - start;
+  if(start < 0)
+      return;
 
 
 
   //
-  // Dump RAW ổn định
+  // frame chuẩn
   //
+
+  int frame = 140;
+
+  if(start+frame > len)
+      frame = len-start;
+
+
 
   ESP_LOGI("remote.raw","Received Raw:");
 
-  for (int i = 0; i < frame_len; i++)
+  for(int i=0;i<frame;i++)
   {
-      ESP_LOGI("remote.raw","%d,", pulses[start+i]);
+      ESP_LOGI("remote.raw","%d,",raw[start+i]);
   }
 
 
@@ -86,20 +79,18 @@ void TuyaRfComponent::loop()
 
 
 
-void TuyaRfComponent::set_receiver(bool enabled)
-{
+void TuyaRfComponent::set_receiver(bool enabled) {
 
   this->receiver_disabled_ = !enabled;
 
   if(enabled)
-      StartRx();
+    StartRx();
 
 }
 
 
 
-void TuyaRfComponent::send_internal(uint32_t code,uint32_t times)
-{
+void TuyaRfComponent::send_internal(uint32_t code, uint32_t times) {
 
   StartTx();
 
