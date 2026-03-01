@@ -10,315 +10,410 @@ namespace tuya_rf {
 
 static const char *const TAG = "tuya_rf";
 
-void IRAM_ATTR HOT RemoteReceiverComponentStore::gpio_intr(RemoteReceiverComponentStore *arg) {
+
+void IRAM_ATTR HOT RemoteReceiverComponentStore::gpio_intr(RemoteReceiverComponentStore *arg)
+{
   const uint32_t now = micros();
-  const uint32_t next = (arg->buffer_write_at + 1) % arg->buffer_size;
-  const bool level = !arg->pin.digital_read();
 
-  if (level != next % 2)
-    return;
+  const uint32_t next =
+      (arg->buffer_write_at + 1) % arg->buffer_size;
 
-  if (next == arg->buffer_read_at)
-    return;
+  const bool level =
+      !arg->pin.digital_read();
 
-  const uint32_t last_change = arg->buffer[arg->buffer_write_at];
-  const uint32_t time_since_change = now - last_change;
+  if(level!=next%2)
+      return;
 
-  if (time_since_change <= arg->filter_us)
-    return;
+  if(next==arg->buffer_read_at)
+      return;
 
-  arg->buffer[arg->buffer_write_at = next] = now;
-}
+  const uint32_t last_change =
+      arg->buffer[arg->buffer_write_at];
 
+  const uint32_t time_since_change =
+      now-last_change;
 
-void TuyaRfComponent::turn_on_receiver() {
-  if (this->receiver_disabled_) {
-    this->receiver_disabled_=false;
-    this->set_receiver(true);
-  }
-}
+  if(time_since_change<=arg->filter_us)
+      return;
 
-void TuyaRfComponent::turn_off_receiver() {
-  if (!this->receiver_disabled_) {
-    this->receiver_disabled_=true;
-    this->set_receiver(false);
-  }
+  arg->buffer[arg->buffer_write_at=next]=now;
 }
 
 
 
-void TuyaRfComponent::set_receiver(bool on) {
-
-  auto &s = this->store_;
-
-  if (on) {
-
-    if (s.buffer==NULL) {
-      s.buffer = new uint32_t[s.buffer_size];
-      memset((void*)s.buffer,0,s.buffer_size*sizeof(uint32_t));
+void TuyaRfComponent::turn_on_receiver()
+{
+    if(this->receiver_disabled_){
+        this->receiver_disabled_=false;
+        this->set_receiver(true);
     }
+}
 
-    if (!this->RemoteReceiverBase::pin_->digital_read()) {
-      s.buffer_write_at = s.buffer_read_at = 1;
-    } else {
-      s.buffer_write_at = s.buffer_read_at = 0;
+
+
+void TuyaRfComponent::turn_off_receiver()
+{
+    if(!this->receiver_disabled_){
+        this->receiver_disabled_=true;
+        this->set_receiver(false);
     }
+}
 
-    this->RemoteReceiverBase::pin_->attach_interrupt(
+
+
+void TuyaRfComponent::set_receiver(bool on)
+{
+
+ auto &s=this->store_;
+
+ if(on){
+
+   if(s.buffer==NULL){
+
+     s.buffer=new uint32_t[s.buffer_size];
+
+     memset(s.buffer,0,
+        s.buffer_size*sizeof(uint32_t));
+
+   }
+
+   if(!this->RemoteReceiverBase::pin_->digital_read())
+        s.buffer_write_at=s.buffer_read_at=1;
+   else
+        s.buffer_write_at=s.buffer_read_at=0;
+
+
+   this->RemoteReceiverBase::pin_->attach_interrupt(
       RemoteReceiverComponentStore::gpio_intr,
       &this->store_,
       gpio::INTERRUPT_ANY_EDGE
-    );
-
-    this->high_freq_.start();
-
-    if (!this->transmitting_)
-      StartRx();
-
-  } else {
-
-    if (!this->transmitting_)
-      CMT2300A_GoStby();
-
-    this->RemoteReceiverBase::pin_->detach_interrupt();
-    this->high_freq_.stop();
-
-  }
-}
+   );
 
 
+   this->high_freq_.start();
 
-void TuyaRfComponent::setup() {
+   if(!this->transmitting_)
+        StartRx();
 
-  this->RemoteTransmitterBase::pin_->setup();
-  this->RemoteTransmitterBase::pin_->digital_write(false);
+ }
+ else{
 
-  this->RemoteReceiverBase::pin_->setup();
+   if(!this->transmitting_)
+        CMT2300A_GoStby();
 
-  auto &s = this->store_;
+   this->RemoteReceiverBase::pin_->detach_interrupt();
 
-  s.filter_us = this->filter_us_;
-  s.pin = this->RemoteReceiverBase::pin_->to_isr();
-  s.buffer_size = this->buffer_size_;
+   this->high_freq_.stop();
 
-  if (s.buffer_size % 2 != 0)
-    s.buffer_size++;
-
-  this->set_receiver(!this->receiver_disabled_);
+ }
 
 }
 
 
 
-void TuyaRfComponent::dump_config() {
 
-  ESP_LOGCONFIG(TAG,"Tuya RF");
+void TuyaRfComponent::setup()
+{
 
-  ESP_LOGCONFIG(TAG,"Buffer size: %u",this->buffer_size_);
+ this->RemoteTransmitterBase::pin_->setup();
+
+ this->RemoteTransmitterBase::pin_->digital_write(false);
+
+ this->RemoteReceiverBase::pin_->setup();
+
+ auto &s=this->store_;
+
+ s.filter_us=this->filter_us_;
+
+ s.pin=this->RemoteReceiverBase::pin_->to_isr();
+
+ s.buffer_size=this->buffer_size_;
+
+ if(s.buffer_size%2!=0)
+      s.buffer_size++;
+
+ this->set_receiver(!this->receiver_disabled_);
 
 }
 
 
 
-void IRAM_ATTR TuyaRfComponent::send_internal(uint32_t send_times,uint32_t send_wait) {
+void TuyaRfComponent::dump_config()
+{
+ ESP_LOGCONFIG(TAG,"Tuya RF");
+}
 
-  InterruptLock lock;
 
-  this->transmitting_=true;
 
-  int res=StartTx();
 
-  if(res!=0){
+//
+// ===== TIMING TX (GỐC ESPHOME) =====
+//
+
+void TuyaRfComponent::await_target_time_()
+{
+ const uint32_t current_time=micros();
+
+ if(this->target_time_==0)
+      this->target_time_=current_time;
+ else
+      while(this->target_time_>micros());
+}
+
+
+
+void TuyaRfComponent::mark_(uint32_t usec)
+{
+ this->await_target_time_();
+
+ this->RemoteTransmitterBase::pin_->digital_write(false);
+
+ this->target_time_+=usec;
+}
+
+
+
+void TuyaRfComponent::space_(uint32_t usec)
+{
+ this->await_target_time_();
+
+ this->RemoteTransmitterBase::pin_->digital_write(true);
+
+ this->target_time_+=usec;
+}
+
+
+
+void IRAM_ATTR TuyaRfComponent::send_internal(uint32_t send_times,uint32_t send_wait)
+{
+
+ InterruptLock lock;
+
+ this->transmitting_=true;
+
+ int res=StartTx();
+
+ if(res!=0){
     this->transmitting_=false;
     return;
-  }
+ }
 
-  this->target_time_=0;
+ this->target_time_=0;
 
-  this->space_(2500);
+ this->space_(2500);
 
-  for(uint32_t i=0;i<send_times;i++){
 
-    for(int32_t item: this->RemoteTransmitterBase::temp_.get_data()){
+ for(uint32_t i=0;i<send_times;i++){
 
-      if(item>0)
+  for(int32_t item:
+      this->RemoteTransmitterBase::temp_.get_data()){
+
+    if(item>0)
         this->mark_(item);
-      else
+    else
         this->space_(-item);
 
-      App.feed_wdt();
-    }
-
-    if(i+1<send_times && send_wait>0)
-      this->space_(send_wait);
+    App.feed_wdt();
   }
 
-  this->space_(2000);
+  if(i+1<send_times && send_wait>0)
+      this->space_(send_wait);
 
-  this->transmitting_=false;
+ }
 
-  if(this->receiver_disabled_)
+
+ this->space_(2000);
+
+ this->transmitting_=false;
+
+
+ if(this->receiver_disabled_)
       CMT2300A_GoStby();
-  else
+ else
       StartRx();
+
 }
 
 
 
+
 //
-// ===== TỐI ƯU CHỈ SỬA LOOP =====
+// ===== LOOP GỐC + PERFECT FILTER =====
 //
 
 
-void TuyaRfComponent::loop() {
+void TuyaRfComponent::loop()
+{
 
-  if (this->receiver_disabled_)
-    return;
+ if(this->receiver_disabled_)
+      return;
 
-  auto &s = this->store_;
+ auto &s=this->store_;
 
-  const uint32_t write_at = s.buffer_write_at;
+ const uint32_t write_at=s.buffer_write_at;
 
-  const uint32_t dist =
-      (s.buffer_size + write_at - s.buffer_read_at)
-      % s.buffer_size;
+ const uint32_t dist=
+ (s.buffer_size+write_at-s.buffer_read_at)
+ %s.buffer_size;
 
-  if (dist <= 1)
-    return;
+ if(dist<=1)
+      return;
 
-  bool receive_end=false;
 
-  uint32_t new_write_at=old_write_at_;
+ bool receive_end=false;
 
-  while(new_write_at!=write_at){
+ uint32_t new_write_at=old_write_at_;
 
-    uint32_t prev=
-      (new_write_at==0)?
-      s.buffer_size-1:
-      new_write_at-1;
 
-    uint32_t diff=
-      s.buffer[new_write_at]
-      -s.buffer[prev];
+ while(new_write_at!=write_at){
 
-    if(new_write_at%2==0){
+   uint32_t prev=
+   new_write_at==0?
+   s.buffer_size-1:
+   new_write_at-1;
 
-      if(diff>=this->start_pulse_min_us_){
+   uint32_t diff=
+   s.buffer[new_write_at]
+   -s.buffer[prev];
 
-        if(diff>=this->end_pulse_us_){
+   if(new_write_at%2==0){
 
-          if(receive_started_){
-            receive_end=true;
-            new_write_at=prev;
-            break;
-          }
+     if(diff>=start_pulse_min_us_){
 
-        }else if(diff<this->start_pulse_max_us_){
+       if(diff>=end_pulse_us_){
 
-          s.buffer_read_at=prev;
-          receive_started_=true;
+         if(receive_started_){
 
-        }
-      }
+           receive_end=true;
 
-    }
+           new_write_at=prev;
 
-    if(!receive_started_)
-      s.buffer_read_at=prev;
+           break;
 
-    new_write_at=
-      (new_write_at+1)%s.buffer_size;
-  }
+         }
 
-  old_write_at_=new_write_at;
+       }
+       else if(diff<start_pulse_max_us_){
 
-  if(!receive_end)
+         s.buffer_read_at=prev;
+
+         receive_started_=true;
+
+       }
+
+     }
+
+   }
+
+
+   if(!receive_started_)
+        s.buffer_read_at=prev;
+
+   new_write_at=
+   (new_write_at+1)%s.buffer_size;
+
+ }
+
+
+ old_write_at_=new_write_at;
+
+
+ if(!receive_end)
       return;
 
 
 
-  receive_started_=false;
+ receive_started_=false;
 
 
 
-  uint32_t prev=s.buffer_read_at;
+ uint32_t prev=s.buffer_read_at;
 
-  s.buffer_read_at=
-      (s.buffer_read_at+1)%s.buffer_size;
-
-
-
-  this->RemoteReceiverBase::temp_.clear();
-
-  int32_t multiplier=
-      s.buffer_read_at%2==0?1:-1;
+ s.buffer_read_at=
+ (s.buffer_read_at+1)%s.buffer_size;
 
 
 
-  while(prev!=new_write_at){
-
-    int32_t delta=
-      s.buffer[s.buffer_read_at]
-      -s.buffer[prev];
-
-    this->RemoteReceiverBase::temp_.push_back(
-      multiplier*delta
-    );
-
-    prev=s.buffer_read_at;
-
-    s.buffer_read_at=
-      (s.buffer_read_at+1)%s.buffer_size;
-
-    multiplier*=-1;
-
-  }
+ this->RemoteReceiverBase::temp_.clear();
 
 
 
-  //
-  // ===== PERFECT FILTER =====
-  //
-
-  int sync=-1;
-
-  for(size_t i=0;i<this->RemoteReceiverBase::temp_.size();i++){
-
-    if(abs(this->RemoteReceiverBase::temp_[i])>9000){
-
-      sync=i;
-
-      break;
-    }
-  }
+ int32_t multiplier=
+ s.buffer_read_at%2==0?1:-1;
 
 
-  if(sync>=0){
 
-    std::vector<int32_t> clean;
+ while(prev!=new_write_at){
 
-    int frame=140;
-
-    for(int i=0;i<frame;i++){
-
-      int idx=sync+i;
-
-      if(idx>=this->RemoteReceiverBase::temp_.size())
-        break;
-
-      clean.push_back(
-        this->RemoteReceiverBase::temp_[idx]
-      );
-    }
-
-    this->RemoteReceiverBase::temp_=clean;
-
-  }
+   int32_t delta=
+   s.buffer[s.buffer_read_at]
+   -s.buffer[prev];
 
 
-  this->call_listeners_dumpers_();
+   this->RemoteReceiverBase::temp_.push_back(
+      multiplier*delta);
+
+
+   prev=s.buffer_read_at;
+
+
+   s.buffer_read_at=
+   (s.buffer_read_at+1)%s.buffer_size;
+
+
+   multiplier*=-1;
+
+ }
+
+
+
+//
+// ===== SYNC FILTER =====
+//
+
+int sync=-1;
+
+for(size_t i=0;
+i<this->RemoteReceiverBase::temp_.size();
+i++){
+
+ if(abs(this->RemoteReceiverBase::temp_[i])>9000){
+
+    sync=i;
+    break;
+
+ }
 
 }
+
+
+
+if(sync>=0){
+
+ std::vector<int32_t> clean;
+
+ for(int i=0;i<140;i++){
+
+   int idx=sync+i;
+
+   if(idx>=this->RemoteReceiverBase::temp_.size())
+        break;
+
+   clean.push_back(
+   this->RemoteReceiverBase::temp_[idx]);
+
+ }
+
+ this->RemoteReceiverBase::temp_=clean;
+
+}
+
+
+
+ this->call_listeners_dumpers_();
+
+}
+
 
 
 }
