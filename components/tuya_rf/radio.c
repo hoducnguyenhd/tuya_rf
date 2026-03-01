@@ -2,6 +2,25 @@
 #include "cmt2300a.h"
 
 
+
+static void rf_prepare_rx()
+{
+    CMT2300A_GoStby();
+
+    delay(4);
+
+    CMT2300A_ClearInterruptFlags();
+    CMT2300A_ClearRxFifo();
+
+    delay(4);
+
+    CMT2300A_GoRx();
+
+    delay(15);
+}
+
+
+
 void Radio_Init(void)
 {
     CMT2300A_Init();
@@ -12,43 +31,16 @@ void Radio_Init(void)
 
     delay(10);
 
-    CMT2300A_GoStby();
-
-    delay(10);
-
-    CMT2300A_ClearInterruptFlags();
-    CMT2300A_ClearRxFifo();
-
-    delay(10);
-
-    CMT2300A_GoRx();
-
-    delay(30);
-
-    CMT2300A_ClearInterruptFlags();
-    CMT2300A_ClearRxFifo();
+    rf_prepare_rx();
 }
 
 
 
+/* ===== REQUIRED ===== */
+
 int StartRx(void)
 {
-    CMT2300A_GoStby();
-
-    delay(5);
-
-    CMT2300A_ClearInterruptFlags();
-    CMT2300A_ClearRxFifo();
-
-    delay(5);
-
-    CMT2300A_GoRx();
-
-    delay(25);
-
-    CMT2300A_ClearInterruptFlags();
-    CMT2300A_ClearRxFifo();
-
+    rf_prepare_rx();
     return 1;
 }
 
@@ -58,15 +50,15 @@ int StartTx(void)
 {
     CMT2300A_GoStby();
 
-    delay(5);
+    delay(4);
 
     CMT2300A_ClearInterruptFlags();
 
-    delay(5);
+    delay(4);
 
     CMT2300A_GoTx();
 
-    delay(5);
+    delay(4);
 
     return 1;
 }
@@ -75,21 +67,6 @@ int StartTx(void)
 
 int RestartRx(void)
 {
-    CMT2300A_GoStby();
-
-    delay(5);
-
-    CMT2300A_ClearInterruptFlags();
-    CMT2300A_ClearRxFifo();
-
-    delay(5);
-
-    CMT2300A_GoRx();
-
-    delay(25);
-
-    CMT2300A_ClearInterruptFlags();
-    CMT2300A_ClearRxFifo();
-
+    rf_prepare_rx();
     return 1;
 }
