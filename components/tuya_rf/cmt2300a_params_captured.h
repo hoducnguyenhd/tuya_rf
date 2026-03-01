@@ -25,7 +25,6 @@ const unsigned char CMT2300A_ConfigTbl[] =
 0x00,
 
 
-
 /* Frequency 433.92 */
 
 0x62,
@@ -46,11 +45,10 @@ const unsigned char CMT2300A_ConfigTbl[] =
 0x00,
 
 
-
 /* DataRate */
 
-0x09,
-0xD0,
+0x08,
+0xC0,
 0x00,
 0x00,
 0x00,
@@ -67,26 +65,23 @@ const unsigned char CMT2300A_ConfigTbl[] =
 0x00,
 
 
+/* Baseband lọc nhiễu mạnh */
 
-/* Baseband FILTER SNIFF MODE */
-
 0x00,
-0x0F,
+0x08,
 0x00,
 0x00,
 0x00,
 0x00,
 0x00,
 0x00,
-
 
 
-/* Narrow filter */
+/* Filter sniff */
 
 0x01,
 0x00,
 0x00,
-
 
 
 /* Bandwidth cực hẹp */
@@ -98,20 +93,18 @@ const unsigned char CMT2300A_ConfigTbl[] =
 0x00,
 
 
-
-/* AGC TỐI ƯU */
+/* AGC tối ưu */
 
 0x00,
-0x0F,
+0x08,
 0x00,
 
-0xF4,
+0xF8,
 0x00,
 0x00,
 
 0x3F,
 0x00,
-
 
 
 /* Packet OFF */
